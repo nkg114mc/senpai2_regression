@@ -234,34 +234,6 @@ int main(int argc, char * argv[]) {
       else if (option == "train") {
          std::cout << "Run training task." << std::endl;
 
-         /*
-         //run_training("./test_gensfen4000.bin", "./test_gensfen4000_copy.bin");
-         //std::string trnFn1b = "/home/mc/sidework/nnchess/Stockfish-NNUE/src/trainingdata1b/trn_1b_d10.bin";
-         //std::string trnFn = "/home/mc/sidework/nnchess/Stockfish-NNUE/src/trainingdata100m/trn_100m_d10.bin";
-         //std::string vadFn = "/home/mc/sidework/nnchess/Stockfish-NNUE/src/validate1m/val_1m_d14.bin";
-         std::string trnFn1b = "/media/mc/Fastdata/Stockfish-NNUE/trainingdata1b/trn_1b_d10.bin";
-         std::string trnFn = "/media/mc/Fastdata/Stockfish-NNUE/trainingdata100m/trn_100m_d10.bin";
-         std::string vadFn = "/media/mc/Fastdata/Stockfish-NNUE/validate1m/val_1m_d14.bin";
-
-         std::string trnFnSenp2 = "/media/mc/Fastdata/Stockfish-NNUE/senp2/trn_100m_senp2.bin";
-         std::string vadFnSenp2 = "/media/mc/Fastdata/Stockfish-NNUE/senp2/val_1m_senp2.bin";
-
-
-         //run_training(trnFn, vadFn);
-
-         //run_training("./feat2.bin", vadFn);
-         std::vector<std::string> trnList;
-         //load_file_names_from_list_file("/media/mc/Fastdata/senpai2_regression/data_folder/train100m_split320/filelist.txt", trnList);
-         load_file_names_from_list_file("/media/mc/Fastdata/senpai2_regression/data_folder/train1b_split320/filelist.txt", trnList);
-         //load_file_names_from_list_file("/media/mc/Fastdata/senpai2_regression/data_folder/senp2_train100m_split320/filelist.txt", trnList);
-         std::vector<std::string> tList{
-            "/media/mc/Fastdata/senpai2_regression/data_folder/train100m_split320/feat3-0.bin",
-            //"/media/mc/Fastdata/senpai2_regression/data_folder/train100m_split320/feat3-1.bin"
-         };
-
-         run_training_with_reader(trnList, vadFn);
-         */
-
          int trainMode = -1; // 0, 1
          TrainingArguments trainingArgs;
 
@@ -324,9 +296,7 @@ int main(int argc, char * argv[]) {
             } else if (option == "multichunks") {
                convertMode = 2;
                parse_featgen_multichunks_args(cmd, folder, chunkName, batchSize);
-            }/* else {
-               std::cerr << "unknown con: " << option << std::endl;
-            }*/
+            }
          }
 
          if (convertMode == 1) {

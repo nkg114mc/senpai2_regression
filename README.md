@@ -50,3 +50,44 @@ According to my test with 40moves/5mins time control, the current best-performed
 
 
 ### Options
+
+#### Training Options
+*  `train`: Run the training task.
+*  `inputsfen SFEN_PATH`: The input sfen file `SFEN_PATH` as the training set.
+*  `trainlist LIST_FILE`: The list file path `LIST_FILE` as the training set. The list file is a file that contains a list full path of chunk feature files, one path per line. The following is an example:
+```
+/full/path/to/feature-chunk-0.bin
+/full/path/to/feature-chunk-1.bin
+/full/path/to/feature-chunk-2.bin
+...
+/full/path/to/feature-chunk-320.bin
+```
+Note that you can choose only one of input mode between `inputsfen` and `trainlist`, but not both.
+*  `validsfen SFEN_PATH`: The sfen file `SFEN_PATH` as the validation set.
+*  `epoch MAX_EPOCHS`: The maximum number of epochs to run linear regression. Default `MAX_EPOCHS=200`.
+*  `minbatch BATCH_SIZE`: The mini-batch size of linear regression. Default `BATCH_SIZE=40000`.
+*  `learningrate LEARNING_RATE`: The learning rate of linear regression. Default `LEARNING_RATE=0.002`.
+*  `regularizer REG_LAMDBA`: The L1 regularizer of linear regression. Default `REG_LAMDBA=0.001`.
+*  `helpers N_THREADS`: The number of threads to run the inference in parallel. Maximum supported `N_THREADS` is 16.
+*  `doshuffle BOOL`: Do data shuffle before each epoch or not. `BOOL` can be `true` /`false`. Default `true`.
+*  `dofeaturenorm BOOL`: Do feature normalization or not. `BOOL` can be `true`/`false`. Default `false`.
+
+#### Feature Converting Options
+
+*  `featurefilegen`: Run feature converting task: converting a sfen file to one or multiple pre-computed feature files.
+*  `inputsfen SFEN_PATH`: The input sfen file `SFEN_PATH` that need to be converted.
+**Converting to a single feature file:**
+*  `singlebin`: Convert the input sfen file to a single feature file.
+*  `singlefilename SINGLE_FILE_PATH`: The single output file path `SINGLE_FILE_PATH`.
+**Converting to multiple feature files:**
+*  `multichunks`: Convert the input sfen file to multiple chunk feature files.
+*  `multichunksfolder OUTPUT_DIR_PATH`: The output folder to store the chunk feature files.
+*  `multichunksname FILE_NAME`: The file name of each chunk file. The final file name will be `FILE_NAME-N.bin`, where `N` is the chunk index.
+*  `chucksize CHUNK_SIZE`: The number of examples in each chunk file.
+
+#### Validation Options
+
+*  `validationonly`: Run validation task: takes a sfen validation set and a weight file, compute and print the loss.
+*  `validsfenfile SFEN_PATH`: The sfen file `SFEN_PATH` as the validation set.
+*  `weightfile WEIGHT_PATH`: The weight file `WEIGHT_PATH` with name pattern "weights_int100_*.txt" (scaled and rounded weight). Do not use the float type weight file here.
+*  `batchsize BATCH_SIZE`: Set the batch size of running validation to `BATCH_SIZE` (this option will not affects the loss value, so usually the default value is enough).
