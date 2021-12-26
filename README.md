@@ -8,10 +8,12 @@ Current code are only developed and tested under Linux/Unix environment. To comp
 
 ### Get Training Data
 
-**NNUE sfen file as input**
+#### NNUE sfen file as input
+
 senpai2-regression use the [NNUE](https://www.chessprogramming.org/Stockfish_NNUE) (Efficiently Updatable Neural Networks) training data as input. See [here](https://github.com/joergoster/Stockfish-NNUE) for more details about the training data generation approach in NNUE. 
 
-**Pre-computed feature files as input**
+#### Pre-computed feature files as input
+
 Obviously, repeatedly decoding the chess position and re-computing the feature vectors in each epoch is purely a waste of time, because the feature vector will remain unchanged across epochs. Storing the featurization result in memory is impossible neither due to the huge number of training examples. In solve this problem, I designed a file format to store the feature vectors, so that the trainer will directly read the featurization results from disk rather than re-computed them again and again. 
 
 You can run the following command to convert the original sfen file to feature files:
