@@ -46,7 +46,7 @@ Open any `weights_int100_*.txt` file in the `save` folder, you will see the weig
 ```
 In the Senpai 2.0 source file `eval.cpp`, from line 76 to 836 we will see a similar hard-code weight vector. Replace that original weights with your the learned weights and recompile Senpai, then it is ready to use.
 
-According to my test with 40moves/5mins time control, the current best-performed learned weight is still 60 ELO weaker than the original weight of Senpai. I will provide a more detailed report including all findings later.
+According to my test with 40moves/5mins time control, the current best-performed learned weight (You can find them in the `best-learned-weights` folder) is still 60 ELO weaker than the original weight of Senpai. I will provide a more detailed report including all findings later.
 
 
 ### Options
@@ -76,9 +76,11 @@ Note that you can choose only one of input mode between `inputsfen` and `trainli
 
 *  `featurefilegen`: Run feature converting task: converting a sfen file to one or multiple pre-computed feature files.
 *  `inputsfen SFEN_PATH`: The input sfen file `SFEN_PATH` that need to be converted.
+
 **Converting to a single feature file:**
 *  `singlebin`: Convert the input sfen file to a single feature file.
 *  `singlefilename SINGLE_FILE_PATH`: The single output file path `SINGLE_FILE_PATH`.
+
 **Converting to multiple feature files:**
 *  `multichunks`: Convert the input sfen file to multiple chunk feature files.
 *  `multichunksfolder OUTPUT_DIR_PATH`: The output folder to store the chunk feature files.
