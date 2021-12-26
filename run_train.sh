@@ -1,0 +1,1 @@
+./senpai train inputfeatbin trainlist /media/mc/Fastdata/senpai2_regression/data_folder/train100m_split320/filelist10.txt validsfen /media/mc/Fastdata/Stockfish-NNUE/validate1m/val_1m_d14.bin epoch 10 minbatch 50000 learningrate 0.0025 regularizer 0.005 helpers 4 doshuffle true

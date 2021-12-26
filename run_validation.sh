@@ -1,0 +1,1 @@
+./senpai validationonly validsfenfile /home/mc/sidework/nnchess/Stockfish-NNUE/src/validate1m/val_1m_d14.bin weightfile ./weights_int100.txt
