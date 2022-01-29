@@ -38,6 +38,8 @@ Please see more details about descriptions of options in the Option section. Dur
 
 ### How to Use Trained Weights
 
+#### Step 1: Replace the weight
+
 Open any `weights_int100_*.txt` file in the `save` folder, you will see the weight vector was stored as following:
 ```
 	Score_Pair(20808,27737),
@@ -46,9 +48,34 @@ Open any `weights_int100_*.txt` file in the `save` folder, you will see the weig
 	...
 	Score_Pair(6489,3939),
 ```
-In the Senpai 2.0 source file `eval.cpp`, from line 76 to 836 we will see a similar hard-code weight vector. Replace that original weights with your the learned weights and recompile Senpai, then it is ready to use.
+In the Senpai 2.0 source file `eval.cpp`, from line 76 to 836 we will see a similar hard-code weight vector. Replace that original weights with your the learned weights and recompile Senpai.
 
-According to my test with 40moves/5mins time control, the current best-performed learned weight (You can find them in the `best-learned-weights` folder) is still 60 ELO weaker than the original weight of Senpai. I will provide a more detailed report including all findings later.
+#### Step 2: Change the `Scale` to `200`
+
+In the source file `eval.cpp`, at line 30 you will see 
+```
+const int  Scale { 100 }; // units per cp
+```
+We need to change this line to
+```
+const int  Scale { 200 }; // units per cp
+```
+
+This is because the training data is generated from original Stockfish, which has a range of [-32000, +32000], while Senpai evaluation use a range of [-10000, +10000]. As a result, the computed evaluation score with our new learned weight is usually at least two times larger than the original Senpai score. To ensure that all other components involving the actual score values (e.g., aspiration window, futility pruning, delta pruning, etc.) work correctly, we need to shrink the computed score for its 0.5 scale to avoid unexpected ELO drops.
+
+#### Step 3: Change the `Inf` to `32000`
+
+In the source file `score.hpp`, at line 14 you will see
+```
+const Score Inf = Score(10000);
+```
+ then change it to 
+```
+const Score Inf = Score(32000);
+```
+due to the same reason as Step 2.
+
+After doing the 3 steps above, the new weight is ready to use. According to my test with 40moves/5mins time control, the current best-performed learned weight (You can find them in the `best-learned-weights` folder) has a comparable strength against the original weight of Senpai. Please see more details in `best-learned-weights` folder. 
 
 
 ### Options
@@ -65,25 +92,29 @@ According to my test with 40moves/5mins time control, the current best-performed
 /full/path/to/feature-chunk-320.bin
 ```
 Note that you can choose only one of input mode between `inputsfen` and `trainlist`, but not both.
-*  `validsfen SFEN_PATH`: The sfen file `SFEN_PATH` as the validation set.
-*  `epoch MAX_EPOCHS`: The maximum number of epochs to run linear regression. Default `MAX_EPOCHS=200`.
-*  `minbatch BATCH_SIZE`: The mini-batch size of linear regression. Default `BATCH_SIZE=40000`.
-*  `learningrate LEARNING_RATE`: The learning rate of linear regression. Default `LEARNING_RATE=0.002`.
-*  `regularizer REG_LAMDBA`: The L1 regularizer of linear regression. Default `REG_LAMDBA=0.001`.
-*  `helpers N_THREADS`: The number of threads to run the inference in parallel. Maximum supported `N_THREADS` is 16.
-*  `doshuffle BOOL`: Do data shuffle before each epoch or not. `BOOL` can be `true` /`false`. Default `true`.
-*  `dofeaturenorm BOOL`: Do feature normalization or not. `BOOL` can be `true`/`false`. Default `false`.
+* `validsfen SFEN_PATH`: The sfen file `SFEN_PATH` as the validation set.
+* `epoch MAX_EPOCHS`: The maximum number of epochs to run linear regression. Default `MAX_EPOCHS=200`.
+* `minbatch BATCH_SIZE`: The mini-batch size of linear regression. Default `BATCH_SIZE=40000`.
+* `learningrate LEARNING_RATE`: The learning rate of linear regression. Default `LEARNING_RATE=0.002`.
+* `regularizer REG_LAMDBA`: The L1 regularizer of linear regression. Default `REG_LAMDBA=0.001`.
+* `helpers N_THREADS`: The number of threads to run the inference in parallel. Maximum supported `N_THREADS` is 16.
+* `doshuffle BOOL`: Do data shuffle before each epoch or not. `BOOL` can be `0` /`1`. Default `doshuffle=1`.
+* `dofeaturenorm BOOL`: Do feature normalization or not. `BOOL` can be `0`/`1`. Default `dofeaturenorm=0`.
+* `dofiltering BOOL`: Do filtering on the input training positions. `BOOL` can be `0`/`1`. When this flag is turned on, all non-quite training positions will be removed. Non-quite positions are the chess positions whose best move is either capture or promote move. Default `dofiltering=1`. (**Note** that this option is only applicable when using the `inputsfen` input mode).
 
 #### Feature Converting Options
 
-*  `featurefilegen`: Run feature converting task: converting a sfen file to one or multiple pre-computed feature files.
-*  `inputsfen SFEN_PATH`: The input sfen file `SFEN_PATH` that need to be converted.
+* `featurefilegen`: Run feature converting task: converting a sfen file to one or multiple pre-computed feature files.
+* `inputsfen SFEN_PATH`: The input sfen file `SFEN_PATH` that need to be converted.
+* `filtering BOOL`: Similar to `dofiltering` option for training, when this flag is turned on, all non-quite training positions will be removed. Default `filtering=1`.
 
 **Converting to a single feature file:**
+
 *  `singlebin`: Convert the input sfen file to a single feature file.
 *  `singlefilename SINGLE_FILE_PATH`: The single output file path `SINGLE_FILE_PATH`.
 
 **Converting to multiple feature files:**
+
 *  `multichunks`: Convert the input sfen file to multiple chunk feature files.
 *  `multichunksfolder OUTPUT_DIR_PATH`: The output folder to store the chunk feature files.
 *  `multichunksname FILE_NAME`: The file name of each chunk file. The final file name will be `FILE_NAME-N.bin`, where `N` is the chunk index.

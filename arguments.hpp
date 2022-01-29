@@ -19,6 +19,7 @@ struct TrainingArguments {
     bool doShuffle;
     int n_helpers;
     bool doFeatureNormalization;
+    bool doFiltering;
 };
 
 #endif // #ifndef ARGUEMENTS_HPP

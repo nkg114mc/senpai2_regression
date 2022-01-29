@@ -387,7 +387,7 @@ int ply(Score sc) {
 
 // prototypes
 
-static bool in_check (const Pos & pos, Side sd);
+//bool in_check (const Pos & pos, Side sd);
 
 static Bit slider_attacks_to (const Pos & pos, Side sd, Square to);
 
@@ -3773,6 +3773,10 @@ int drawish_reduce_factor(const Pos & pos, Side sd) {
    //return score::clamp(score::side(Score(sc), sd)); // for sd
 }
 */
+
+bool in_check(const Pos & pos, Side sd) {
+   return has_attack(pos, side_opp(sd), pos.king(sd));
+}
 
 int eval_featurize(const Pos & pos, SparseVector &sv) {
    EvalVector eval_vec;

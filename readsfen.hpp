@@ -106,6 +106,9 @@ struct PackedSfenValue
 };
 
 // featurizer
+void pos_from_sfen(Pos & pos, PackedSfen & sfen, bool mirror);
+Move sfen_move_to_senp_move(uint16_t sf_move);
+bool move_is_capture_or_promote(Move mv, const Pos & pos);
 int eval_nonreduce(const Pos & pos);
 int eval_featurize(const Pos & pos, SparseVector &sv);
 int eval_featurize_with_factor(const Pos & pos, FeatureAndFactor &fv);
@@ -115,11 +118,12 @@ void run_training_sfen(TrainingArguments &args);
 void run_training_feature_bin_chunks(TrainingArguments &args);
 void run_validate(std::string valFn, std::string weightFn);
 void load_training_data_to_mem(std::string trnFn);
-void convert_sfen_to_bin(std::string trnFn, std::string outputFn);
+void convert_sfen_to_bin(std::string trnFn, std::string outputFn, bool filtering);
 void convert_sfen_to_bin_blocks(std::string trnFn, 
                                 std::string outputFldr, 
                                 std::string baseOutputName, 
-                                uint64_t chunkSize);
+                                uint64_t chunkSize, 
+                                bool filtering);
 void test_shuffle();
 void generate_senpai_sfen_bin(std::string inputFn, std::string outputFn);
 void check_feature_scale_bin(std::string trnFn);

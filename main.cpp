@@ -54,6 +54,7 @@ void parse_sfen_input_training_args(std::string cmd, TrainingArguments &trnArgs)
    trnArgs.doShuffle = false;
    trnArgs.nnueLambda = 1;
    trnArgs.doFeatureNormalization = false;
+   trnArgs.doFiltering = true;
 
 	while (iss) {
 		std::string option;
@@ -71,7 +72,7 @@ void parse_sfen_input_training_args(std::string cmd, TrainingArguments &trnArgs)
 
          trnArgs.trnList.clear();
          load_file_names_from_list_file(trainListFile, trnArgs.trnList);
-      } else if (option == "trainsfen") { // not used any more
+      } else if (option == "trainsfen") {
          iss >> trnArgs.trnFn;
       } else if (option == "validsfen") {
          iss >> trnArgs.valFn;
@@ -89,6 +90,8 @@ void parse_sfen_input_training_args(std::string cmd, TrainingArguments &trnArgs)
          iss >> trnArgs.doShuffle;
       } else if (option == "dofeaturenorm") {
          iss >> trnArgs.doFeatureNormalization;
+      } else if (option == "dofiltering") {
+         iss >> trnArgs.doFiltering;
       } else {
          std::cerr << "unknown argument: " << option << std::endl;
       }
@@ -106,6 +109,7 @@ void parse_feature_bin_input_training_args(std::string cmd, TrainingArguments &t
    trnArgs.n_helpers = 16;
    trnArgs.doShuffle = true;
    trnArgs.doFeatureNormalization = false;
+   trnArgs.doFiltering = true;
 
 	while (iss) {
 		std::string option;
@@ -139,13 +143,15 @@ void parse_feature_bin_input_training_args(std::string cmd, TrainingArguments &t
          iss >> trnArgs.doShuffle;
       } else if (option == "dofeaturenorm") {
          iss >> trnArgs.doFeatureNormalization;
+      //} else if (option == "dofiltering") { // can not do filtering in this case
+      //   iss >> trnArgs.doFiltering;
       } else {
          std::cerr << "unknown argument: " << option << std::endl;
       }
    }
 }
 
-void parse_featgen_singlefile_args(std::string cmd, std::string &outputFn) {
+void parse_featgen_singlefile_args(std::string cmd, std::string &outputFn, bool &filtering) {
    std::istringstream iss(cmd);
 
 	while (iss) {
@@ -165,6 +171,8 @@ void parse_featgen_singlefile_args(std::string cmd, std::string &outputFn) {
       
       } else if (option == "singlefilename") { // only thing we need
          iss >> outputFn;
+      } else if (option == "filtering") { // only thing we need
+         iss >> filtering;
       } else {
          std::cerr << "unknown argument: " << option << std::endl;
       }
@@ -174,7 +182,8 @@ void parse_featgen_singlefile_args(std::string cmd, std::string &outputFn) {
 void parse_featgen_multichunks_args(std::string cmd, 
                                     std::string &outputDir,
                                     std::string &outputName,
-                                    int &batchSize) {
+                                    int &batchSize,
+                                    bool &filtering) {
    std::istringstream iss(cmd);
 
 	while (iss) {
@@ -198,6 +207,8 @@ void parse_featgen_multichunks_args(std::string cmd,
          iss >> outputName;
       } else if (option == "chucksize") { // things we need
          iss >> batchSize;
+      } else if (option == "filtering") { // thing we need
+         iss >> filtering;
       } else {
          std::cerr << "unknown argument: " << option << std::endl;
       }
@@ -277,6 +288,7 @@ int main(int argc, char * argv[]) {
          std::string folder = "";
          std::string chunkName = "";
          int batchSize = 312500;
+         bool filtering = true;
 
          while (is) {
 		      is >> option;
@@ -290,21 +302,23 @@ int main(int argc, char * argv[]) {
             // single file
             } else if (option == "singlebin") {
                convertMode = 1;
-               parse_featgen_singlefile_args(cmd, singleFn);
+               parse_featgen_singlefile_args(cmd, singleFn, filtering);
 
             // multiple chunks
             } else if (option == "multichunks") {
                convertMode = 2;
-               parse_featgen_multichunks_args(cmd, folder, chunkName, batchSize);
-            }
+               parse_featgen_multichunks_args(cmd, folder, chunkName, batchSize, filtering);
+            }/* else {
+               std::cerr << "unknown con: " << option << std::endl;
+            }*/
          }
 
          if (convertMode == 1) {
             std::cout << "Generate singe feature file mode." << std::endl;
-            convert_sfen_to_bin(inputSfenFn, singleFn);
+            convert_sfen_to_bin(inputSfenFn, singleFn, filtering);
          } else if (convertMode == 2) {
             std::cout << "Generate multiple feature file chunks mode." << std::endl;
-            convert_sfen_to_bin_blocks(inputSfenFn, folder, chunkName, batchSize);
+            convert_sfen_to_bin_blocks(inputSfenFn, folder, chunkName, batchSize, filtering);
          } else {
             std::cerr << "unknown convert mode..." << std::endl;
          }
@@ -347,6 +361,8 @@ int main(int argc, char * argv[]) {
          //perftest_read_multifeature_single_bin("/home/mc/sidework/nnchess/senpai2_regression/feat4.bin", 40000);
          //perftest_parallel_read_feature_block_bin(trnList, 40000, 16);
          //perftest_read_feature_sfen_bin(sfenList, 40000);
+         check_position_qsearch("/media/mc/Fastdata/Stockfish-NNUE/trainingdata1b/trn_1b_d10.bin", 40000);
+
          break;
       }
 

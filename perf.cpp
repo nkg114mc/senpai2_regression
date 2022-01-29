@@ -462,3 +462,65 @@ void test_multifile_reader() {
    int cnt = reader.read_one_mini_batch(200000, examples); 
    std::cout << cnt << std::endl;
 }
+
+void check_position_qsearch(std::string trainFile, int miniBatchSize) {
+
+    SfenBufferedReader reader(false); // reader only do shuffle in each buffer
+    reader.initSingleFile(trainFile);
+
+    int64_t totalCnt = 0;
+    int actualBatchSize = 0;
+	int64_t quietCnt = 0;
+	int64_t nonCheckCnt = 0;
+	int64_t bothCnt = 0;
+    Pos pos;
+
+    do {
+
+		std::vector<PackedSfenValue> trainExamples;
+		actualBatchSize = reader.read_one_mini_batch(miniBatchSize, trainExamples);
+        totalCnt += actualBatchSize;
+
+        if (actualBatchSize > 0) {
+			for (int i = 0; i < trainExamples.size(); i++) {
+				pos_from_sfen(pos, trainExamples[i].sfen, false);
+				Move bestMove = sfen_move_to_senp_move(trainExamples[i].move);
+				bool nonCapture = false;
+				bool nonCheck = false;
+				
+				if (!move_is_capture_or_promote(bestMove, pos)) {
+					quietCnt++;
+					nonCapture = true;
+				}/* else {
+					std::string fenStr = pos_to_fen(pos);
+					std::string moveStr = move::to_uci(bestMove, pos);
+
+					std::cout << fenStr << " " << moveStr << std::endl;
+				}*/
+				if (!in_check(pos, pos.turn())) {
+					nonCheckCnt++;
+					nonCheck = true;
+				}/* else {
+					std::string fenStr = pos_to_fen(pos);
+					std::cout << fenStr << std::endl;
+				}*/
+
+				if (nonCapture && nonCheck) {
+					bothCnt++;
+				}
+			}
+			trainExamples.clear();
+        }
+
+    } while (actualBatchSize > 0);
+
+	std::cout << "Example count = " << totalCnt << std::endl;
+	std::cout << "NonCapture count = " << quietCnt << std::endl;
+	std::cout << "NonCheck count = " << nonCheckCnt << std::endl;
+	std::cout << "Both count = " << bothCnt << std::endl;
+
+	double ratio = ((double)quietCnt) / ((double)totalCnt);
+	std::cout << "NonCapture percent = " << ratio << std::endl;
+	std::cout << "NonCheck percent = " << (((double)nonCheckCnt) / ((double)totalCnt)) << std::endl;
+	std::cout << "Both percent = " << (((double)bothCnt) / ((double)totalCnt)) << std::endl;
+}

@@ -612,6 +612,32 @@ void pos_from_sfen(Pos & pos, PackedSfen & sfen, bool mirror) {
   create_pos(pos, sideToMove, piece_side, castling_rooks, epSquare);
 }
 
+Move sfen_move_to_senp_move(uint16_t sf_move) {
+  Square fromsq = sf_square_to_senp_square((sf_move >> 6) & 0x3F);
+  Square tosq = sf_square_to_senp_square(sf_move & 0x3F);
+  Piece prom = Piece_None;
+
+  uint16_t flag = (sf_move >> 14) & 0x3;
+  if (flag > 0) {
+    if (flag == 2) {
+      prom = Pawn; // fake promote
+    } else if (flag == 1) {
+      prom = (Piece)(((sf_move >> 12) & 0x3) + 1);
+    } else if (flag == 3) {
+      prom = King; // fake promote
+    }
+  }
+
+  return move::make(fromsq, tosq, prom);
+}
+
+bool move_is_capture_or_promote(Move mv, const Pos & pos) {
+	//Square t = Square((int(mv) >> 0) & 0x3F);
+	//Piece prom = Piece((int(mv) >> 12) & 0x7);
+	//return (!pos.is_empty(t)) || (prom != Piece_None);
+  return (move::is_capture(mv, pos) || move::is_promotion(mv));
+}
+
 void read_sfen_file(string input_filename) {
 
   std::ofstream outf("xxx.log");
@@ -918,6 +944,7 @@ private:
   std::vector<FeatureAndFactor> *featAndFacs_ptr;
   FeatureMatrix *feature_matrix;
   WorkType workType;
+  bool doFiltering;
 
   SenpLock dataLock;
   SenpLock ioLock;
@@ -928,16 +955,15 @@ public:
 
   void init(std::vector<PackedSfenValue> *exmp_ptr,
             DenseVector *w_ptr,
-            FeatureMatrix *feat_mat) {
+            FeatureMatrix *feat_mat,
+            bool filtering) {
 
     dataLock.lock();
     examples_ptr = exmp_ptr;
     featAndFacs_ptr = nullptr;
     weight_ptr = w_ptr;
     feature_matrix = feat_mat;
-    
-    //currentIdx = 0;
-    //endIdx = examples_ptr->size();
+    doFiltering = filtering;
 
     for (int i = 0; i < 32; i++) {
       slave_register[i] = false;
@@ -948,13 +974,15 @@ public:
 
   void initFeat(std::vector<FeatureAndFactor> *feat_ptr,
                 DenseVector *w_ptr,
-                FeatureMatrix *feat_mat) {
+                FeatureMatrix *feat_mat,
+                bool filtering) {
 
     dataLock.lock();
     examples_ptr = nullptr;
     featAndFacs_ptr = feat_ptr;
     weight_ptr = w_ptr;
     feature_matrix = feat_mat;
+    doFiltering = filtering;
 
     for (int i = 0; i < 32; i++) {
       slave_register[i] = false;
@@ -970,6 +998,7 @@ public:
     featAndFacs_ptr = nullptr;
     weight_ptr = w_ptr;
     feature_matrix = feat_mat;
+    //doFiltering = filtering;
 
     for (int i = 0; i < 32; i++) {
       slave_register[i] = false;
@@ -1013,6 +1042,10 @@ public:
 
   WorkType getWorkType() {
     return workType;
+  }
+
+  bool getDoFiltering() {
+    return doFiltering;
   }
 
   void writeResult(TrainingExample &exmple, int workerId) {
@@ -1185,21 +1218,38 @@ public:
           // featurizing
           example_ptr = sl_ptr->getExample(i);
           pos_from_sfen(pos, example_ptr->sfen, false);
-          eval_featurize(pos, trnExmp.feature);
-          trnExmp.y_truth = example_ptr->score;
-          trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
+          
+          bool shouldInclude = false;
+          if (sl_ptr->getDoFiltering()) {
+            Move bestMove = sfen_move_to_senp_move(example_ptr->move);
+            if (!move_is_capture_or_promote(bestMove, pos)) {
+              if (!in_check(pos, pos.turn())) {
+                shouldInclude = true;
+              }
+            }
+          } else {
+            shouldInclude = true;
+          }
+
+          if (shouldInclude) {
+            eval_featurize(pos, trnExmp.feature);
+            trnExmp.y_truth = example_ptr->score;
+            trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
+            sl_ptr->writeResult(trnExmp, this->id);
+            cnt++;
+          }
+
         } else if (sl_ptr->getWorkType() == WorkType::INFERENCE_ONLY) {
           // directly inference without featurization
           //trnExmp.fromFeatAndFctr(*(sl_ptr->getFeatAndFac(i)));
           //trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
           trnExmp.fromFeatAndFctrAndDoInference(*(sl_ptr->getFeatAndFac(i)), *(sl_ptr->getWeight()), 
                                                 doFeatScaling, featScalar);
+          sl_ptr->writeResult(trnExmp, this->id);
+          cnt++;
         } else {
           std::cerr << "unknown thread work type! " << sl_ptr->getWorkType() << std::endl;
         }
-
-        sl_ptr->writeResult(trnExmp, this->id);
-        cnt++;
       }
 
     }
@@ -1274,14 +1324,29 @@ void idle_loop(ThreadWorker * worker) {
         TrainingExample trnExmp;
 
         if (sl_ptr->getWorkType() == WorkType::FEATURIZE_AND_INFERENCE) {
-
           // featurizing
           example_ptr = sl_ptr->getExample(i);
-          //std::cout << example_ptr << " " << sl_ptr << std::endl;
           pos_from_sfen(pos, example_ptr->sfen, false);
-          eval_featurize(pos, trnExmp.feature);
-          trnExmp.y_truth = example_ptr->score;
-          trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
+
+          bool shouldInclude = false;
+          if (sl_ptr->getDoFiltering()) {
+            Move bestMove = sfen_move_to_senp_move(example_ptr->move);
+            if (!move_is_capture_or_promote(bestMove, pos)) {
+              if (!in_check(pos, pos.turn())) {
+                shouldInclude = true;
+              }
+            }
+          } else {
+            shouldInclude = true;
+          }
+
+          if (shouldInclude) {
+            eval_featurize(pos, trnExmp.feature);
+            trnExmp.y_truth = example_ptr->score;
+            trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
+            sl_ptr->writeResult(trnExmp, worker->id);
+            cnt++;
+          }
 
         } else if (sl_ptr->getWorkType() == WorkType::INFERENCE_ONLY) {
 
@@ -1289,14 +1354,13 @@ void idle_loop(ThreadWorker * worker) {
           //trnExmp.fromFeatAndFctr(*(sl_ptr->getFeatAndFac(i)));
           //trnExmp.y_pred = inference(trnExmp.feature, *(sl_ptr->getWeight()));
           trnExmp.fromFeatAndFctrAndDoInference(*(sl_ptr->getFeatAndFac(i)), *(sl_ptr->getWeight()), 
-                                                  worker->getDoScaling(), worker->getFeatScalar());
-
+                                                worker->getDoScaling(), worker->getFeatScalar());
+          sl_ptr->writeResult(trnExmp, worker->id);
+          cnt++;
         } else {
           std::cerr << "unknown thread work type! " << sl_ptr->getWorkType() << std::endl;
         }
 
-        sl_ptr->writeResult(trnExmp, worker->id);
-        cnt++;
       }
 
     }
@@ -1336,6 +1400,7 @@ public:
   double nnueLambda = 1.0; // nnue loss iterpolation
   bool doShuffle = true;
   int n_helpers = 1;
+  bool doFiltering = true;
 
   bool trnFnPrinted;
   bool valFnPrinted;
@@ -1477,7 +1542,7 @@ public:
 
           SharedList slist;
           //slist.init(&trainExamples, &weight, &features, &y_truths, &y_preds);
-          slist.init(&trainExamples, &weight, &featureMatrix);
+          slist.init(&trainExamples, &weight, &featureMatrix, doFiltering);
 
           int eachCnt = trainExamples.size() / n_helpers;
           int lastEnd = -1;
@@ -1498,8 +1563,8 @@ public:
 
           // run optimization
           UtilTimer::time_t start_t3 = UtilTimer::now();
-          //optimizeWeight(weight, featureMatrix);
-          optimizeWeightNNUE(weight, featureMatrix);
+          optimizeWeight(weight, featureMatrix);
+          //optimizeWeightNNUE(weight, featureMatrix);
           t3 += (timer.time(start_t3));
         }
 
@@ -1512,10 +1577,12 @@ public:
       UtilTimer::time_t start_valid = UtilTimer::now();
       //double loss = computeLoss(validExamples, weight);
       double loss = readValidSetAndComputeLoss(validFile, weight, 50000);
+      double filteredLoss = readValidSetAndComputeLossFiltered(validFile, weight, 50000);
       std::cout << "validation time consumed " << (timer.time(start_valid) / 1000) << " secs." << std::endl;
       std::cout << "t1 = " << t1 << " t2 = " << t2 << " t3 = " << t3 << std::endl;
 
       std::cout << "Iteration " << iter << " Loss = " << loss << std::endl;
+      std::cout << "Iteration " << iter << " FilterLoss = " << filteredLoss << std::endl;
 
       // save weight snapshot
       dumpWeight(weight, getFilename("./save/weights", iter));
@@ -1774,32 +1841,65 @@ public:
     std::cout << "Total_loss = " << totalLoss << " example_count = " << cnt << std::endl;
     return (totalLoss / ((double)cnt));
   }
-/*
-  void optimizeWeight(DenseVector &weight, 
-                      std::vector<SparseVector> &features, 
-                      std::vector<double> &y_preds, 
-                      std::vector<double> &y_truths) {
 
-    if (features.size() == 0) {
-      return; // nothing to optimize
+  double readValidSetAndComputeLossFiltered(std::string filename, 
+                                            DenseVector &weight,
+                                            int maxBatchSize) {
+
+    std::ifstream inf(filename, std::ios::binary);
+
+    Pos pos;
+    double totalFilteredLoss = 0;
+    int64_t cnt_filtered = 0;
+    std::vector<PackedSfenValue> validExamples; // buffer size
+
+	  while (inf) {
+      PackedSfenValue p;
+		  if (inf.read((char*)&p, sizeof(PackedSfenValue))) {
+
+        bool shouldInclude = false;
+        pos_from_sfen(pos, p.sfen, false);
+        Move bestMove = sfen_move_to_senp_move(p.move);
+        if (!move_is_capture_or_promote(bestMove, pos)) {
+          if (!in_check(pos, pos.turn())) {
+            shouldInclude = true;
+          }
+        }
+
+        if (shouldInclude) {
+          validExamples.push_back(p);
+          cnt_filtered++;
+        }
+
+        // process one mini batch
+        if (maxBatchSize > 0) {
+          if (validExamples.size() >= maxBatchSize) {
+            totalFilteredLoss += computeLossSum(validExamples, weight);
+            validExamples.clear();
+          }
+        }
+		  } else {
+        if (!valFnPrinted) {
+          std::cout << "Done reading " << filename << std::endl;
+          valFnPrinted = true;
+        }
+			  break;
+		  }
+	  }
+
+    // for the last incomplete batch
+    if (validExamples.size() > 0) {
+      totalFilteredLoss += computeLossSum(validExamples, weight);
+    }
+    
+    if (cnt_filtered == 0) {
+      return 0;
     }
 
-    assert(y_preds.size() == features.size());
-    assert(y_preds.size() == y_truths.size());
-
-    DenseVector gradient(weight.size());
-    gradient.clear();
-
-    // compute gradient
-    for (int i = 0; i < features.size(); i++) {
-      gradient.addSparseAndMulti(features[i], -1 * (y_preds[i] - y_truths[i]));
-    }
-    gradient.divide((double)features.size());
-
-    gradient.multiply(learningRate);
-    weight.addDense(gradient);
+    std::cout << "Total_filtered_loss = " << totalFilteredLoss << " example_count = " << cnt_filtered << std::endl;
+    return (totalFilteredLoss / ((double)cnt_filtered));
   }
-*/
+
   void optimizeWeight(DenseVector &weight, 
                       FeatureMatrix &featureMatrix) {
 
@@ -1815,17 +1915,15 @@ public:
         rowCnt++;
       }
     }
-    gradient.divide((double)rowCnt);
-
+    
     if (rowCnt == 0) {
       return;
     }
 
-    //for (int i = 0; i < features.size(); i++) {
-    //  gradient.addSparseAndMulti(features[i], -1 * (y_preds[i] - y_truths[i]));
-    //}
-    //gradient.divide((double)features.size());
-  
+    //std::cout << "rowCnt = " << rowCnt << std::endl;
+    gradient.divide((double)rowCnt);
+
+
     if (lambda != 0) {
       DenseVector regularize(weight);
       regularize.multiply(-1 * lambda);
@@ -2026,18 +2124,12 @@ public:
       }
       UtilTimer::time_t start_iter = UtilTimer::now();
 
-      //std::vector<FeatureAndFactor> featExamples;
 
       int batchId = 0;
-      int64_t totalCnt = 0;
+      int64_t actualCnt = 0;
       int actualBatchSize = 0;
       //int epoch = 0;
       do {
-
-        // batch id
-        //if (batchId % 250 == 0) {
-          //std::cout << "batchId = " << batchId << std::endl;
-        //}
         batchId++;
 
         FeatureMatrix featureMatrix(n_helpers);
@@ -2071,6 +2163,8 @@ public:
         
         // run optimization
         actualBatchSize = featureMatrix.countTotalRows();
+        actualCnt += actualBatchSize;
+        //std::cout << "mini-batch size = " << actualBatchSize << std::endl;
         if (actualBatchSize > 0) {
           UtilTimer::time_t start_t3 = UtilTimer::now();
           optimizeWeight(weight, featureMatrix);
@@ -2079,6 +2173,7 @@ public:
         }
 
       } while (actualBatchSize > 0);
+      std::cout << "training set size = " << actualCnt << std::endl;
 
 
       // check the loss after one iteration
@@ -2090,6 +2185,7 @@ public:
         std::cout << "Weight is scaled for validation." << std::endl;
       }
       double loss = readValidSetAndComputeLoss(validFile, weightScaled, 50000);
+      double filteredLoss = readValidSetAndComputeLossFiltered(validFile, weightScaled, 50000);
       std::cout << "validation time consumed " << (timer.time(start_valid) / 1000) << " secs." << std::endl;
       std::cout << "t1 = " << t1 << " t2 = " << t2 << " t3 = " << t3 << std::endl;
       std::cout << "t4 = " << t4 << std::endl;
@@ -2103,7 +2199,7 @@ public:
       std::cout << "accum_t1 = " << t1Sum << " accum_t2 = " << t2Sum << std::endl;
 
       std::cout << "Iteration " << iter << " Loss = " << loss << std::endl;
-
+      std::cout << "Iteration " << iter << " FilterLoss = " << filteredLoss << std::endl;
       // save weight snapshot
       dumpWeight(weight, getFilename("./save/weights", iter));
       dumpWeightInt100(weight, getFilename("./save/weights_int100", iter));
@@ -2530,7 +2626,9 @@ void writeFileCompress(BufferedFileWriter &outf, FeatureAndFactor &fv, int y_tru
   //std::cout << ygold << " " << (int)mg_fctr << " " << (int)eg_fctr << std::endl;
 }
 
-void convert_sfen_to_bin(std::string trnFn, std::string outputFn) {
+void convert_sfen_to_bin(std::string trnFn, 
+                         std::string outputFn, 
+                         bool doFiltering) {
 
   byte_cnt[0] = 0;
   byte_cnt[1] = 0;
@@ -2551,6 +2649,7 @@ void convert_sfen_to_bin(std::string trnFn, std::string outputFn) {
 
   int maxByteCnt = 0;
   uint64_t n_cnt = 0;
+  uint64_t n_cnt_afterfilter = 0;
   Pos pos;
   PackedSfenValue p;
   while (inf) {
@@ -2566,11 +2665,25 @@ void convert_sfen_to_bin(std::string trnFn, std::string outputFn) {
 
       eval_featurize_with_factor(pos, featFactor);
 
-      //// save to file
-      //writeFileCompressWithByteCnt(outf, featFactor, p.score, byteCnt);
-      //writeFileCompress(outf, featFactor, p.score);
-      writeFileCompress(writer, featFactor, p.score, p.game_result);
-      flushCnt++;
+      bool shouldInclude = false;
+      if (doFiltering) {
+        Move bestMove = sfen_move_to_senp_move(p.move);
+        if (!move_is_capture_or_promote(bestMove, pos)) {
+          if (!in_check(pos, pos.turn())) {
+            shouldInclude = true;
+          }
+        }
+      } else {
+        shouldInclude = true;
+      }
+
+      if (shouldInclude) {
+        //// save to file
+        writeFileCompress(writer, featFactor, p.score, p.game_result);
+        n_cnt_afterfilter++;
+        flushCnt++;
+      }
+
       int byteCnt = writer.getSize();
       if (maxByteCnt < byteCnt) {
         maxByteCnt = byteCnt;
@@ -2588,6 +2701,7 @@ void convert_sfen_to_bin(std::string trnFn, std::string outputFn) {
 
     if (n_cnt % 1000000 == 0) {
       std::cout << "Convert training example " << n_cnt << " to csv" << std::endl;
+      std::cout << "After filtering example " << n_cnt_afterfilter << " to csv" << std::endl;
       std::cout << "max byte count = " << maxByteCnt << std::endl;
     }
 	}
@@ -2624,7 +2738,8 @@ std::string get_chunck_file_name(std::string baseOutputName, int idx) {
 void convert_sfen_to_bin_blocks(std::string trnFn, 
                                 std::string outputFldr, 
                                 std::string baseOutputName, 
-                                uint64_t chunkSize) {
+                                uint64_t chunkSize,
+                                bool doFiltering) {
 
   byte_cnt[0] = 0;
   byte_cnt[1] = 0;
@@ -2642,6 +2757,7 @@ void convert_sfen_to_bin_blocks(std::string trnFn,
   
 
   uint64_t n_cnt = 0;
+  uint64_t n_cnt_afterfilter = 0;
   uint64_t n_chunk = 0;
 
   int flushLimit = 10;
@@ -2656,7 +2772,7 @@ void convert_sfen_to_bin_blocks(std::string trnFn,
       pos_from_sfen(pos, p.sfen, false);
       eval_featurize_with_factor(pos, featFactor);
 
-      if (n_chunk >= chunkSize || n_cnt == 0) {
+      if (n_chunk >= chunkSize || n_cnt == 0) { // n_chunk does not care about filtering or not
         n_chunk = 0;
         if (fileIdx >= 0) {
           // last block
@@ -2679,9 +2795,25 @@ void convert_sfen_to_bin_blocks(std::string trnFn,
         std::cout << "Start writing file " << std::endl;
       }
 
-      //// save to file
-      writeFileCompress(writer, featFactor, p.score, p.game_result);
-      flushCnt++;
+
+      bool shouldInclude = false;
+      if (doFiltering) {
+        Move bestMove = sfen_move_to_senp_move(p.move);
+        if (!move_is_capture_or_promote(bestMove, pos)) {
+          if (!in_check(pos, pos.turn())) {
+            shouldInclude = true;
+          }
+        }
+      } else {
+        shouldInclude = true;
+      }
+
+      if (shouldInclude) {
+        //// save to file
+        writeFileCompress(writer, featFactor, p.score, p.game_result);
+        n_cnt_afterfilter++;
+        flushCnt++;
+      }
 
       if (flushCnt >= flushLimit) {
         writer.flushWithSize();
@@ -2697,6 +2829,7 @@ void convert_sfen_to_bin_blocks(std::string trnFn,
 
     if (n_cnt % 1000000 == 0) {
       std::cout << "Convert training example " << n_cnt << " to csv" << std::endl;
+      std::cout << "After filtering example " << n_cnt_afterfilter << " to csv" << std::endl;
     }
 
     //if (n_cnt >= 160000) {

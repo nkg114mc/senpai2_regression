@@ -693,6 +693,14 @@ int  force (const Pos & pos, Side sd);
 
 }
 
+namespace move {
+
+Move make (Square from, Square to, Piece prom = Piece_None);
+bool is_promotion  (Move mv);
+bool is_capture    (Move mv, const Pos & pos);
+std::string to_uci   (Move mv, const Pos & pos);
+
+}
 
 // constants
 
@@ -704,6 +712,8 @@ Pos pos_from_fen (const std::string & s);
 std::string pos_to_fen(const Pos & pos);
 void create_pos(Pos & pos, Side turn, Bit piece_side[], Bit castling_rooks, Square ep_sq);
 void read_sfen_file(std::string input_filename);
+bool in_check(const Pos & pos, Side sd);
+
 
 namespace hash {
 

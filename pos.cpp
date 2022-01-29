@@ -300,6 +300,24 @@ bool is_check(Move mv, const Pos & pos) {
    return false;
 }
 
+std::string to_uci(Move mv, const Pos & /* pos */) {
+
+   const std::string Piece_Char { "PNBRQK" };
+
+   if (mv == None) return "0000";
+   if (mv == Null) return "0000";
+
+   Square from = move::from(mv);
+   Square to   = is_castling(mv) ? castling_king_to(mv) : move::to(mv);
+
+   std::string s;
+   s += square_to_string(from);
+   s += square_to_string(to);
+   if (is_promotion(mv)) s += std::tolower(Piece_Char[prom(mv)]);
+
+   return s;
+}
+
 } // namespace move
 
 
@@ -683,6 +701,7 @@ int force(const Pos & pos, Side sd) {
 }
 
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
